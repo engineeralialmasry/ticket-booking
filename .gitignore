@@ -1,0 +1,12 @@
+﻿.gradle/
+build/
+app/build/
+app/bin/
+recovered_backup/
+recovered-src/
+tools/
+*.class
+*.jar
+*.log
+.DS_Store
+.vscode/
