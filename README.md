@@ -181,9 +181,9 @@ Measured results:
 
 | Concurrency | Total Requests |  Throughput |   p50 |   p95 |    p99 | 429 |
 | ----------: | -------------: | ----------: | ----: | ----: | -----: | --: |
-|          50 |           2000 | 187.4 req/s | 224ms | 488ms |  829ms |   0 |
-|         100 |           5000 | 339.7 req/s | 269ms | 419ms |  913ms |   0 |
-|         200 |          10000 | 285.2 req/s | 674ms | 958ms | 1753ms |   0 |
+|          50 |           2000 | 407.2 req/s | 104ms | 213ms |  474ms |   0 |
+|         100 |           5000 | 510.7 req/s | 175ms | 265ms |  684ms |   0 |
+|         200 |          10000 | 518.7 req/s | 344ms | 460ms | 1333ms |   0 |
 
 Evidence:
 
@@ -197,9 +197,9 @@ docs/evidence/09_load_test_200_clients.png
 
 | Concurrency | Total Requests |  Throughput |    p50 |    p95 |    p99 |
 | ----------: | -------------: | ----------: | -----: | -----: | -----: |
-|         500 |          20000 | 331.0 req/s | 1516ms | 2316ms | 2684ms |
-|         800 |          30000 | 496.6 req/s | 1664ms | 1955ms | 3245ms |
-|        1000 |          50000 | 822.8 req/s | 1768ms | 2414ms | 2877ms |
+|         500 |          20000 | 579.9 req/s | 987ms | 1548ms | 1978ms |
+|         800 |          30000 | 500.1 req/s | 1558ms | 1779ms | 2318ms |
+|        1000 |          50000 | 828.4 req/s | 1939ms | 2519ms | 2927ms |
 
 Evidence:
 
@@ -233,9 +233,7 @@ Observed behavior:
 Evidence:
 
 ```
-docs/evidence/14_payment_latency_injection_started.png
-docs/evidence/16_slow_payment_errors_result.png
-docs/evidence/17_slow_payment_metrics.png
+docs/evidence/slow_payment_errors_latency_metrics_result
 ```
 
 ## 13. CPU Benchmark
@@ -250,10 +248,10 @@ Measured result:
 
 | Tickets | Sequential | Parallel | Same Result | Speedup |
 | ------: | ---------: | -------: | ----------- | ------: |
-|    1000 |       29ms |     21ms | true        |   1.38x |
-|    5000 |       96ms |     40ms | true        |   2.40x |
-|   10000 |      143ms |     49ms | true        |   2.92x |
-|   20000 |      251ms |     85ms | true        |   2.95x |
+|    1000 |       19ms |     9ms | true        |   2.11x |
+|    5000 |       69ms |     15ms | true        |   4.60x |
+|   10000 |      114ms |     31ms | true        |   3.68x |
+|   20000 |      231ms |     56ms | true        |   4.13x |
 
 Evidence:
 
