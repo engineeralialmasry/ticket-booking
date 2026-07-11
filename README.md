@@ -88,7 +88,7 @@ BUILD SUCCESSFUL
 Evidence:
 
 ```
-docs/evidence/24_final_clean_build_after_recovery.png
+docs/evidence/final_clean_build_after_recovery.png
 ```
 
 ## 6. Run Payment Service
@@ -144,7 +144,7 @@ inventory decreases
 Evidence:
 
 ```
-docs/evidence/05_successful_booking_demo.png
+docs/evidence/successful_booking_demo.png
 ```
 
 ## 9. Automated Tests
@@ -155,17 +155,19 @@ Run:
 .\gradlew.bat test
 ```
 
+Evidence:
+
+```
+docs/evidence/final_clean_build_after_recovery
+```
+
 Test evidence:
 
 * InventoryStressTest passed
 * IdempotencyTest passed
 * 2 tests, 0 failures, 100% successful
 
-Evidence:
 
-```
-docs/evidence/02_tests_100_percent.png
-```
 
 ## 10. Load Tests
 
@@ -188,9 +190,7 @@ Measured results:
 Evidence:
 
 ```
-docs/evidence/07_load_test_50_clients.png
-docs/evidence/08_load_test_100_clients.png
-docs/evidence/09_load_test_200_clients.png
+docs/evidence/load_tests_50_100_200_clients.png
 ```
 
 ## 11. High Load Stress Tests
@@ -204,7 +204,7 @@ docs/evidence/09_load_test_200_clients.png
 Evidence:
 
 ```
-docs/evidence/13_high_load_stress_results.png
+docs/evidence/high_load_stress_results.png
 ```
 
 ## 12. Failure Injection
@@ -233,7 +233,7 @@ Observed behavior:
 Evidence:
 
 ```
-docs/evidence/slow_payment_errors_latency_metrics_result
+docs/evidence/slow_payment_errors_latency_metrics_result.png
 ```
 
 ## 13. CPU Benchmark
@@ -256,7 +256,7 @@ Measured result:
 Evidence:
 
 ```
-docs/evidence/19_cpu_benchmark_result.png
+docs/evidence/cpu_benchmark_result.png
 ```
 
 ## 14. Event Log
@@ -283,13 +283,7 @@ Example:
 [event] booking=bk-... key=... -> CONFIRMED charged attempt=3
 ```
 
-Evidence:
 
-```
-docs/evidence/22_event_log_source.png
-docs/evidence/23_booking_states_source.png
-docs/evidence/27_booking_final_metrics_shutdown.png
-```
 
 ## 15. Summary
 
