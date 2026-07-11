@@ -1,12 +1,27 @@
-﻿.gradle/
+﻿# Gradle cache/build output
+.gradle/
 build/
 app/build/
+**/build/
+
+# Java compiled output
 app/bin/
+bin/
+**/bin/
+*.class
+
+# Temporary/recovered files
 recovered_backup/
 recovered-src/
 tools/
-*.class
-*.jar
+
+# Logs
 *.log
+
+# OS / IDE
 .DS_Store
 .vscode/
+
+# Ignore most jar files, but keep Gradle wrapper jar
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
