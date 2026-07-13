@@ -7,6 +7,16 @@ Language: Java 21
 Build Tool: Gradle Wrapper
 IDE: Visual Studio Code
 
+Team members:
+
+Mohamad El Saleh 6652
+
+Ali Hani 6668
+
+Ali Al Masri 6748
+
+
+
 ## 1. Project Goal
 
 This project implements a concurrent ticket booking backend where many clients can book tickets at the same time.
