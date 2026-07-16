@@ -1,311 +1,678 @@
 # Concurrent Ticket Booking System
 
-Course: Concurrency & Distributed Systems
-Project Topic: Topic C — Distributed Order / Transaction Processing
-Application: Concurrent Ticket Booking System
-Language: Java 21
-Build Tool: Gradle Wrapper
-IDE: Visual Studio Code
+A concurrent and distributed ticket-booking backend implemented in Java 21.
 
-Team members:
+This project demonstrates concurrency correctness, bounded execution, shared-state protection, idempotent request handling, distributed payment processing, failure recovery, performance measurement, event logging, and graceful shutdown.
 
-Mohamad El Saleh 6652
+## Project Information
 
-Ali Hani 6668
+| Field | Value |
+|---|---|
+| Course | Concurrency & Distributed Systems |
+| Project Topic | Topic C — Distributed Order / Transaction Processing |
+| Application | Concurrent Ticket Booking System |
+| Primary Language | Java 21 |
+| Build System | Gradle Wrapper |
+| Development Environment | Visual Studio Code |
+| Main Service | BookingApp |
+| Downstream Service | PaymentApp |
 
-Ali Al Masri 6748
+## Team Members
 
+| Name | Student ID |
+|---|---:|
+| Mohamad El Saleh | 6652 |
+| Ali Hani | 6668 |
+| Ali Al Masri | 6748 |
 
+## Demo Video
 
-## 1. Project Goal
+A complete demonstration of the system is available at the following link:
 
-This project implements a concurrent ticket booking backend where many clients can book tickets at the same time.
+[Watch the Concurrent Ticket Booking System Demo](https://drive.google.com/file/d/17UmVkzOImNVj0ksNFuIx39OHQqRVQoV3/view?usp=sharing)
 
-The goal is to prove that the system can:
+## Table of Contents
 
-* handle concurrent booking requests
-* protect shared ticket inventory
-* prevent overselling
-* prevent duplicate bookings using idempotency keys
-* call a separate payment service over HTTP
-* survive payment latency and failure
-* measure throughput, p50, p95, and p99 latency
-* log booking state transitions
-* shut down cleanly
+1. [Project Overview](#project-overview)
+2. [Objectives](#objectives)
+3. [System Architecture](#system-architecture)
+4. [Core Components](#core-components)
+5. [Concurrency and Distributed-System Design](#concurrency-and-distributed-system-design)
+6. [Prerequisites](#prerequisites)
+7. [Build Instructions](#build-instructions)
+8. [Running the Services](#running-the-services)
+9. [API Endpoints](#api-endpoints)
+10. [Manual Verification](#manual-verification)
+11. [Automated Tests](#automated-tests)
+12. [Load Testing](#load-testing)
+13. [High-Load Stress Testing](#high-load-stress-testing)
+14. [Failure Injection](#failure-injection)
+15. [CPU Parallelism Benchmark](#cpu-parallelism-benchmark)
+16. [Booking Lifecycle and Event Logging](#booking-lifecycle-and-event-logging)
+17. [Metrics and Observability](#metrics-and-observability)
+18. [Graceful Shutdown](#graceful-shutdown)
+19. [Evidence](#evidence)
+20. [Conclusion](#conclusion)
 
-This is not a simple CRUD application. The project focuses on concurrency correctness, bounded execution, failure handling, and measurable behavior under load.
+## Project Overview
 
-## 2. Main Services
+The Concurrent Ticket Booking System is a backend application designed to process many booking requests simultaneously while preserving data correctness.
 
-| Service    | Port | Purpose                  |
-| ---------- | ---: | ------------------------ |
-| BookingApp | 8080 | Main booking service     |
-| PaymentApp | 8081 | Separate payment service |
+Unlike a basic CRUD application, the system must coordinate concurrent access to shared ticket inventory, prevent duplicate processing, communicate with an external payment service, handle overload, and remain operational when the downstream payment service becomes slow or unavailable.
 
-## 3. Main Components
+The implementation runs as two independent Java processes:
 
-| Component        | Purpose                                                                  |
-| ---------------- | ------------------------------------------------------------------------ |
-| InventoryManager | Protects shared ticket inventory                                         |
-| IdempotencyStore | Prevents duplicate bookings when requests are retried                    |
-| BookingPipeline  | Runs the booking workflow                                                |
-| PaymentClient    | Calls the PaymentApp over HTTP                                           |
-| EventLog         | Logs booking state transitions                                           |
-| Metrics          | Tracks completed, failed, rejected, queue depth, throughput, and latency |
-| LoadTest         | Sends concurrent booking requests                                        |
-| CpuBenchmark     | Compares sequential vs parallel CPU-bound work                           |
+- `BookingApp` receives and processes booking requests.
+- `PaymentApp` performs payment operations through a real HTTP network boundary.
 
-## 4. Architecture Summary
+## Objectives
 
-The system uses two separate Java processes:
+The system is designed to demonstrate that it can:
 
-```
-Client / LoadTest
-      |
-      | HTTP POST /bookings
-      v
+- process concurrent booking requests;
+- protect shared ticket inventory;
+- prevent ticket overselling;
+- prevent duplicate bookings through idempotency keys;
+- communicate with a separate payment service over HTTP;
+- handle payment latency, timeout, retry, and failure;
+- use bounded workers and queue capacity;
+- expose intentional overload behavior;
+- measure throughput and latency percentiles;
+- record booking state transitions;
+- verify concurrent correctness through automated tests;
+- compare sequential and parallel CPU-bound execution;
+- shut down cleanly.
+
+## System Architecture
+
+### Service Overview
+
+| Service | Port | Responsibility |
+|---|---:|---|
+| `BookingApp` | 8080 | Accepts bookings, protects inventory, executes the booking workflow, and exposes metrics |
+| `PaymentApp` | 8081 | Simulates payment processing, latency, and failure |
+
+### Request Flow
+
+```text
+Client or LoadTest
+        |
+        | HTTP POST /bookings
+        v
 BookingApp :8080
-      |
-      | HTTP POST /charge
-      v
+        |
+        | Reserve inventory
+        | Check idempotency key
+        | Record state transition
+        |
+        | HTTP POST /charge
+        v
 PaymentApp :8081
+        |
+        | Payment response
+        v
+BookingApp
+        |
+        | Confirm or fail booking
+        | Update metrics
+        | Record final state
+        v
+Client
 ```
 
-The HTTP call between BookingApp and PaymentApp is the real network boundary.
+The HTTP call from `BookingApp` to `PaymentApp` represents the distributed network boundary. The services do not communicate through direct in-process method calls.
 
-## 5. Build
+## Core Components
 
-From the project root:
+| Component | Responsibility |
+|---|---|
+| `InventoryManager` | Protects shared ticket inventory and prevents overselling |
+| `IdempotencyStore` | Prevents duplicate booking execution when a request is retried |
+| `BookingPipeline` | Coordinates reservation, payment, confirmation, cancellation, and failure |
+| `PaymentClient` | Calls `PaymentApp` through HTTP and handles timeout or failure behavior |
+| `EventLog` | Records booking state transitions and diagnostic details |
+| `Metrics` | Tracks completed, failed, rejected, queued, and delayed work |
+| `LoadTest` | Generates concurrent HTTP booking requests |
+| `CpuBenchmark` | Compares sequential and parallel CPU-bound processing |
 
+## Concurrency and Distributed-System Design
+
+### Shared Inventory Protection
+
+Ticket inventory is shared mutable state. Concurrent requests must not read and update it independently because this could allow multiple clients to reserve the same ticket.
+
+`InventoryManager` protects the inventory update as one correctness-critical operation.
+
+The main invariant is:
+
+```text
+remainingInventory >= 0
 ```
+
+A successful concurrent test must prove that the inventory never becomes negative and that the number of confirmed reservations never exceeds the available ticket count.
+
+### Idempotency
+
+Every booking request uses an idempotency key.
+
+When the same request is retried, the system identifies the previously processed operation instead of creating a second booking or charging the customer twice.
+
+The intended guarantee is:
+
+```text
+one idempotency key -> one logical booking result
+```
+
+### Bounded Execution
+
+`BookingApp` uses a bounded worker configuration:
+
+```text
+workers=32
+queueCap=500
+```
+
+This prevents unlimited thread creation and unlimited queue growth.
+
+When the system becomes saturated, excess work can be rejected explicitly instead of consuming memory indefinitely.
+
+### Payment Boundary
+
+Payment processing occurs in a separate Java process through HTTP:
+
+```text
+BookingApp :8080 -> PaymentApp :8081
+```
+
+This boundary introduces realistic distributed-system behavior:
+
+- network latency;
+- timeout risk;
+- service unavailability;
+- partial failure;
+- retry behavior;
+- duplicate-request risk;
+- failure propagation.
+
+### Failure Handling
+
+The booking workflow distinguishes between business state and downstream payment state.
+
+A booking may be:
+
+- placed;
+- reserved;
+- waiting for payment;
+- confirmed;
+- failed;
+- cancelled.
+
+Slow or failed payment requests do not terminate the entire booking service. They are handled through bounded waiting, retry logic, failure recording, and inventory recovery where required.
+
+## Prerequisites
+
+Install the following software before building the project:
+
+- Windows 10 or Windows 11;
+- PowerShell;
+- Java Development Kit 21 or newer;
+- Git;
+- Visual Studio Code;
+- VS Code Extension Pack for Java.
+
+Verify Java:
+
+```powershell
+java -version
+javac -version
+```
+
+The reported Java version must be 21 or newer.
+
+Gradle does not need to be installed globally because the repository includes the Gradle Wrapper.
+
+## Build Instructions
+
+Open PowerShell in the project root:
+
+```powershell
 cd C:\Projects\ticket-booking
-.\gradlew.bat clean build --no-daemon
-```
-
-If Gradle has a lock listener issue on Windows, use:
-
-```
-$env:GRADLE_OPTS="-Dorg.gradle.cache.internal.locklistener=false"
 .\gradlew.bat clean build --no-daemon
 ```
 
 Expected result:
 
-```
+```text
 BUILD SUCCESSFUL
 ```
 
-Evidence:
+### Windows Gradle Lock Workaround
 
+If Gradle reports a lock-listener issue on Windows, run:
+
+```powershell
+$env:GRADLE_OPTS="-Dorg.gradle.cache.internal.locklistener=false"
+.\gradlew.bat clean build --no-daemon
 ```
+
+Build evidence:
+
+```text
 docs/evidence/final_clean_build_after_recovery.png
 ```
 
-## 6. Run Payment Service
+## Running the Services
 
-Terminal A:
+The payment service must be running before booking requests are submitted.
 
-```
+### Terminal A — Start PaymentApp
+
+```powershell
 cd C:\Projects\ticket-booking
 java -cp "app\build\classes\java\main" com.ulfg.booking.PaymentApp
 ```
 
-Expected:
+Expected output:
 
-```
+```text
 [payment] listening on :8081
 ```
 
-## 7. Run Booking Service
+### Terminal B — Start BookingApp
 
-Terminal B:
-
-```
+```powershell
 cd C:\Projects\ticket-booking
 java -cp "app\build\classes\java\main" com.ulfg.booking.BookingApp
 ```
 
-Expected:
+Expected output:
 
-```
+```text
 [booking] listening on :8080  workers=32 queueCap=500
 ```
 
-## 8. Manual Test
+### Terminal C — Submit Requests and Inspect State
 
-Terminal C:
+Use a third PowerShell terminal for health checks, booking requests, metrics, inventory inspection, and load tests.
 
-```
+## API Endpoints
+
+### BookingApp
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/bookings` | Submits a booking request |
+| `GET` | `/metrics` | Returns booking and execution metrics |
+| `GET` | `/inventory` | Returns the current inventory state |
+
+### PaymentApp
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Confirms that the payment service is available |
+| `POST` | `/charge` | Processes a payment request |
+
+## Manual Verification
+
+Run the following commands while both services are active:
+
+```powershell
 Invoke-RestMethod -Uri http://localhost:8081/health
-Invoke-RestMethod -Method Post -Uri http://localhost:8080/bookings
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri http://localhost:8080/bookings
+
 Invoke-RestMethod -Uri http://localhost:8080/metrics
+
 Invoke-RestMethod -Uri http://localhost:8080/inventory
 ```
 
-Expected:
+Expected behavior:
 
-```
-status = UP
-booking request = ACCEPTED
-completed count increases
-inventory decreases
+```text
+Payment service status is UP
+Booking request is ACCEPTED
+Completed booking count increases
+Available inventory decreases
 ```
 
-Evidence:
+Manual-test evidence:
 
-```
+```text
 docs/evidence/successful_booking_demo.png
 ```
 
-## 9. Automated Tests
+## Automated Tests
 
-Run:
+Run the complete test suite:
 
-```
+```powershell
+cd C:\Projects\ticket-booking
 .\gradlew.bat test
 ```
 
-Evidence:
+Verified tests:
 
-```
-docs/evidence/final_clean_build_after_recovery
+| Test | Purpose | Result |
+|---|---|---|
+| `InventoryStressTest` | Verifies inventory correctness under concurrent access | Passed |
+| `IdempotencyTest` | Verifies duplicate requests do not create duplicate bookings | Passed |
+
+Test summary:
+
+```text
+2 tests completed
+0 failures
+100% successful
 ```
 
 Test evidence:
 
-* InventoryStressTest passed
-* IdempotencyTest passed
-* 2 tests, 0 failures, 100% successful
-
-
-
-## 10. Load Tests
-
-Run while BookingApp and PaymentApp are active:
-
+```text
+docs/evidence/final_clean_build_after_recovery.png
 ```
+
+## Load Testing
+
+Start both `BookingApp` and `PaymentApp` before executing the load tests.
+
+### Test Commands
+
+```powershell
 java -cp "app\build\classes\java\main" com.ulfg.booking.LoadTest 50 2000
+
 java -cp "app\build\classes\java\main" com.ulfg.booking.LoadTest 100 5000
+
 java -cp "app\build\classes\java\main" com.ulfg.booking.LoadTest 200 10000
 ```
 
-Measured results:
+The first argument is the number of concurrent clients. The second argument is the total number of requests.
 
-| Concurrency | Total Requests |  Throughput |   p50 |   p95 |    p99 | 429 |
-| ----------: | -------------: | ----------: | ----: | ----: | -----: | --: |
-|          50 |           2000 | 407.2 req/s | 104ms | 213ms |  474ms |   0 |
-|         100 |           5000 | 510.7 req/s | 175ms | 265ms |  684ms |   0 |
-|         200 |          10000 | 518.7 req/s | 344ms | 460ms | 1333ms |   0 |
+### Measured Results
+
+| Concurrent Clients | Total Requests | Throughput | p50 | p95 | p99 | HTTP 429 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 50 | 2,000 | 407.2 req/s | 104 ms | 213 ms | 474 ms | 0 |
+| 100 | 5,000 | 510.7 req/s | 175 ms | 265 ms | 684 ms | 0 |
+| 200 | 10,000 | 518.7 req/s | 344 ms | 460 ms | 1,333 ms | 0 |
 
 Evidence:
 
-```
+```text
 docs/evidence/load_tests_50_100_200_clients.png
 ```
 
-## 11. High Load Stress Tests
+### Interpretation
 
-| Concurrency | Total Requests |  Throughput |    p50 |    p95 |    p99 |
-| ----------: | -------------: | ----------: | -----: | -----: | -----: |
-|         500 |          20000 | 579.9 req/s | 987ms | 1548ms | 1978ms |
-|         800 |          30000 | 500.1 req/s | 1558ms | 1779ms | 2318ms |
-|        1000 |          50000 | 828.4 req/s | 1939ms | 2519ms | 2927ms |
+Throughput increased as more concurrent clients were introduced because the booking service could overlap waiting time, particularly the HTTP payment operation.
+
+However, latency also increased with concurrency. The difference between p50 and p99 shows that queueing and scheduling pressure primarily affected the slowest requests.
+
+The results demonstrate that throughput and latency must be evaluated together. A system can complete more requests per second while individual clients experience greater tail latency.
+
+## High-Load Stress Testing
+
+The system was also tested with substantially larger client populations.
+
+### Measured Results
+
+| Concurrent Clients | Total Requests | Throughput | p50 | p95 | p99 |
+|---:|---:|---:|---:|---:|---:|
+| 500 | 20,000 | 579.9 req/s | 987 ms | 1,548 ms | 1,978 ms |
+| 800 | 30,000 | 500.1 req/s | 1,558 ms | 1,779 ms | 2,318 ms |
+| 1,000 | 50,000 | 828.4 req/s | 1,939 ms | 2,519 ms | 2,927 ms |
 
 Evidence:
 
-```
+```text
 docs/evidence/high_load_stress_results.png
 ```
 
-## 12. Failure Injection
+### Interpretation
 
-PaymentApp was restarted with artificial latency:
+Under heavy load:
 
-```
+- requests spent more time waiting for workers;
+- queueing delay increased;
+- median and tail latency increased;
+- throughput did not scale linearly with concurrency;
+- the service remained operational.
+
+The measurements show that adding clients does not automatically improve performance. Worker capacity, queue capacity, payment latency, context switching, and shared-resource contention determine the saturation point.
+
+Performance results are specific to the machine, operating system, JVM state, and active background workloads used during the experiment.
+
+## Failure Injection
+
+The payment service supports controlled latency and failure configuration through environment variables.
+
+### Slow Payment Scenario
+
+Restart `PaymentApp` with three seconds of artificial latency:
+
+```powershell
 $env:PAYMENT_LATENCY_MS="3000"
 $env:PAYMENT_FAIL_RATE="0.0"
+
 java -cp "app\build\classes\java\main" com.ulfg.booking.PaymentApp
 ```
 
-Then the load test was executed:
+Then execute the stress test:
 
-```
+```powershell
 java -cp "app\build\classes\java\main" com.ulfg.booking.LoadTest 1000 50000
 ```
 
-Observed behavior:
+### Observed Behavior
 
-* errors increased under slow payment
-* failed bookings increased
-* metrics endpoint still responded
-* system stayed alive
+During the slow-payment experiment:
+
+- payment-related errors increased;
+- failed booking count increased;
+- request latency increased;
+- workers remained occupied for longer periods;
+- the metrics endpoint continued responding;
+- `BookingApp` remained alive;
+- the failure was visible through metrics and event logs.
 
 Evidence:
 
-```
+```text
 docs/evidence/slow_payment_errors_latency_metrics_result.png
 ```
 
-## 13. CPU Benchmark
+### Failure-Handling Conclusion
+
+The experiment demonstrates partial failure.
+
+`PaymentApp` became slow, but `BookingApp` did not crash. The booking service contained the downstream failure, exposed degraded behavior through metrics, and continued serving operational endpoints.
+
+## CPU Parallelism Benchmark
+
+The project includes a separate CPU-bound benchmark to compare sequential and parallel processing.
 
 Run:
 
-```
+```powershell
 java -cp "app\build\classes\java\main" com.ulfg.booking.CpuBenchmark
 ```
 
-Measured result:
+### Measured Results
 
 | Tickets | Sequential | Parallel | Same Result | Speedup |
-| ------: | ---------: | -------: | ----------- | ------: |
-|    1000 |       19ms |     9ms | true        |   2.11x |
-|    5000 |       69ms |     15ms | true        |   4.60x |
-|   10000 |      114ms |     31ms | true        |   3.68x |
-|   20000 |      231ms |     56ms | true        |   4.13x |
+|---:|---:|---:|:---:|---:|
+| 1,000 | 19 ms | 9 ms | true | 2.11x |
+| 5,000 | 69 ms | 15 ms | true | 4.60x |
+| 10,000 | 114 ms | 31 ms | true | 3.68x |
+| 20,000 | 231 ms | 56 ms | true | 4.13x |
 
 Evidence:
 
-```
+```text
 docs/evidence/cpu_benchmark_result.png
 ```
 
-## 14. Event Log
+### Interpretation
 
-The booking lifecycle states are:
+The benchmark verifies correctness before evaluating speed:
 
-* PLACED
-* RESERVED
-* PAYMENT_PENDING
-* CONFIRMED
-* FAILED
-* CANCELLED
+```text
+sequential result == parallel result
+```
 
-EventLog records:
+Parallel execution produced measurable speedup for the tested workloads. The amount of speedup varied because parallel execution introduces splitting, scheduling, synchronization, and result-combination overhead.
 
-* bookingId
-* idempotencyKey
-* state
-* detail
+The benchmark results are machine-specific and depend on:
+
+- processor core count;
+- JVM warm-up;
+- background activity;
+- workload size;
+- task granularity;
+- scheduling overhead.
+
+Parallel execution is therefore measured rather than assumed to be faster.
+
+## Booking Lifecycle and Event Logging
+
+The booking workflow uses the following states:
+
+```text
+PLACED
+   |
+   v
+RESERVED
+   |
+   v
+PAYMENT_PENDING
+   |
+   +--------------------+
+   |                    |
+   v                    v
+CONFIRMED             FAILED
+                        |
+                        v
+                    CANCELLED
+```
+
+Depending on the failure location, a booking may move to `FAILED` or `CANCELLED`.
+
+### Event Record
+
+Each event contains:
+
+- `bookingId`;
+- `idempotencyKey`;
+- `state`;
+- `detail`.
 
 Example:
 
-```
+```text
 [event] booking=bk-... key=... -> CONFIRMED charged attempt=3
 ```
 
+The event log provides a trace of the booking workflow and helps answer:
 
+- which booking changed state;
+- which idempotency key was used;
+- whether payment was attempted;
+- whether the booking succeeded or failed;
+- how many attempts were required;
+- where a failure occurred.
 
-## 15. Summary
+## Metrics and Observability
 
-This project demonstrates:
+The system tracks operational and performance information including:
 
-* concurrent HTTP booking requests
-* protected shared inventory
-* no overselling
-* idempotency for retried requests
-* real HTTP network boundary between BookingApp and PaymentApp
-* event logging and tracing
-* timeout/failure behavior
-* measured load and stress tests
-* sequential vs parallel CPU benchmark
-* graceful shutdown
+- completed bookings;
+- failed bookings;
+- rejected requests;
+- active or queued work;
+- queue depth;
+- throughput;
+- request latency;
+- p50 latency;
+- p95 latency;
+- p99 latency.
+
+Metrics can be inspected using:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8080/metrics
+```
+
+Inventory can be inspected using:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8080/inventory
+```
+
+These endpoints make it possible to compare system behavior before, during, and after load or failure experiments.
+
+## Graceful Shutdown
+
+Both services are designed to shut down cleanly.
+
+Stop each Java process using:
+
+```text
+Ctrl+C
+```
+
+The graceful-shutdown path allows the application to stop accepting new work, terminate its execution resources, and release service resources instead of leaving unnecessary background threads running.
+
+## Evidence
+
+All screenshots and measured outputs are stored under:
+
+```text
+docs/evidence/
+```
+
+| Evidence File | Description |
+|---|---|
+| `final_clean_build_after_recovery.png` | Successful clean Gradle build and automated-test evidence |
+| `successful_booking_demo.png` | Manual booking, inventory, and metrics verification |
+| `load_tests_50_100_200_clients.png` | Standard concurrent load-test results |
+| `high_load_stress_results.png` | High-load stress-test measurements |
+| `slow_payment_errors_latency_metrics_result.png` | Slow downstream-payment failure experiment |
+| `cpu_benchmark_result.png` | Sequential and parallel CPU benchmark |
+
+## Correctness and Engineering Guarantees
+
+| Requirement | Mechanism | Evidence |
+|---|---|---|
+| Thread-safe inventory | Protected inventory update | `InventoryStressTest` |
+| No overselling | Atomic reservation logic | Inventory remains valid under stress |
+| Duplicate protection | Idempotency key store | `IdempotencyTest` |
+| Bounded resources | 32 workers and queue capacity of 500 | Booking service startup configuration |
+| Distributed communication | HTTP call to separate `PaymentApp` process | Ports 8080 and 8081 |
+| Failure containment | Timeout, retry, failure state, and metrics | Slow-payment experiment |
+| Measurable behavior | Throughput and p50/p95/p99 latency | Load-test tables |
+| Traceability | Booking state-transition event log | Event output |
+| CPU parallelism | Sequential and parallel comparison | `CpuBenchmark` |
+| Clean termination | Graceful shutdown behavior | Controlled service stop |
+
+## Conclusion
+
+The Concurrent Ticket Booking System demonstrates the main concurrency and distributed-system challenges of a real transaction-processing application.
+
+The project includes:
+
+- concurrent HTTP request processing;
+- protected shared ticket inventory;
+- overselling prevention;
+- idempotent retry handling;
+- bounded workers and queue capacity;
+- a real HTTP payment-service boundary;
+- timeout and downstream-failure behavior;
+- booking state-transition logging;
+- throughput and latency-percentile measurement;
+- high-load stress testing;
+- automated concurrency-correctness tests;
+- sequential and parallel CPU benchmarking;
+- graceful shutdown.
+
+The final result is not only a functional booking API. It is a measured concurrent system with explicit correctness guarantees, bounded resource usage, distributed failure behavior, and supporting evidence.
